@@ -19,6 +19,75 @@ function mapPopularityToRange(value) {
   return [60, 100];
 }
 
+// Etiquetas para los presets de álbum que envía el MoodWidget
+const MOOD_ALBUM_LABELS = {
+  debut: "Debut",
+  fearless: "Fearless",
+  speaknow: "Speak Now",
+  red: "Red",
+  "1989": "1989",
+  reputation: "reputation",
+  lover: "Lover",
+  folklore: "folklore",
+  evermore: "evermore",
+  midnights: "Midnights",
+  ttpd: "The Tortured Poets Department",
+};
+
+const PREFERENCES_STORAGE_KEY = "tasteMixerPreferences";
+
+// Ajustes automáticos de preferencias según el mood/álbum
+function adjustPreferencesForMood(preferences, mood) {
+  if (!mood || !mood.preset) return preferences;
+
+  const adjusted = { ...preferences };
+
+  // Ajustar popularidad según la era
+  if (Array.isArray(preferences.popularity)) {
+    let [min, max] = preferences.popularity;
+
+    switch (mood.preset) {
+      // Eras más íntimas / deep cuts -> bajamos popularidad media
+      case "folklore":
+      case "evermore":
+      case "ttpd":
+        min = Math.max(0, min - 10);
+        max = Math.min(100, max - 10);
+        break;
+
+      // Eras muy mainstream / hits fuertes -> subimos popularidad
+      case "1989":
+      case "reputation":
+      case "lover":
+        min = Math.min(100, min + 10);
+        max = Math.min(100, max + 10);
+        break;
+
+      // Resto: mantenemos rango tal cual marque el slider
+      default:
+        break;
+    }
+
+    adjusted.popularity = [min, max];
+  }
+
+  // Importante: ya NO asignamos décadas automáticamente según el álbum.
+  // Las décadas y el rango de años quedan totalmente bajo el control del widget.
+
+  return adjusted;
+}
+
+// Fusionar listas de tracks sin duplicar por id
+function mergeTracksUnique(current, incoming) {
+  const map = new Map(current.map((t) => [t.id, t]));
+  for (const track of incoming) {
+    if (!map.has(track.id)) {
+      map.set(track.id, track);
+    }
+  }
+  return Array.from(map.values());
+}
+
 function DashboardPage() {
   const router = useRouter();
 
@@ -27,8 +96,9 @@ function DashboardPage() {
   const [seedTracks, setSeedTracks] = useState([]);
   const [genres, setGenres] = useState([]);
   const [decades, setDecades] = useState([]);
+  const [yearRange, setYearRange] = useState({ fromYear: null, toYear: null });
   const [popularity, setPopularity] = useState(70);
-  const [mood, setMood] = useState(null);
+  const [mood, setMood] = useState(null); // objeto { preset, energy, valence, danceability, acousticness }
 
   // PLAYLIST GENERADA
   const [tracks, setTracks] = useState([]);
@@ -38,13 +108,81 @@ function DashboardPage() {
   // FAVORITOS
   const [favoriteTracks, setFavoriteTracks] = useState([]);
 
+  // Flag para saber cuándo hemos cargado preferencias desde localStorage
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+
+  // Derivamos el nombre del álbum/era actual a partir del preset del mood
+  const currentMoodAlbum =
+    mood && mood.preset
+      ? MOOD_ALBUM_LABELS[mood.preset] || mood.preset
+      : null;
+
+  // Cargar preferencias desde localStorage al iniciar
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(PREFERENCES_STORAGE_KEY);
+      if (!raw) {
+        setPreferencesLoaded(true);
+        return;
+      }
+
+      const parsed = JSON.parse(raw);
+
+      if (parsed.artists) setArtists(parsed.artists);
+      if (parsed.seedTracks) setSeedTracks(parsed.seedTracks);
+      if (parsed.genres) setGenres(parsed.genres);
+      if (parsed.decades) setDecades(parsed.decades);
+      if (parsed.yearRange) setYearRange(parsed.yearRange);
+      if (typeof parsed.popularity === "number") {
+        setPopularity(parsed.popularity);
+      }
+      if (parsed.mood) setMood(parsed.mood);
+    } catch {
+      // ignoramos errores de parseo
+    } finally {
+      setPreferencesLoaded(true);
+    }
+  }, []);
+
+  // Guardar preferencias en localStorage cuando cambien
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+
+    const payload = {
+      artists,
+      seedTracks,
+      genres,
+      decades,
+      yearRange,
+      popularity,
+      mood,
+    };
+
+    try {
+      localStorage.setItem(PREFERENCES_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+      // ignoramos errores de storage (cuota, etc.)
+    }
+  }, [
+    artists,
+    seedTracks,
+    genres,
+    decades,
+    yearRange,
+    popularity,
+    mood,
+    preferencesLoaded,
+  ]);
+
   // Cargar favoritos desde localStorage al iniciar
   useEffect(() => {
     const stored = localStorage.getItem("favoriteTracks");
     if (stored) {
       try {
         setFavoriteTracks(JSON.parse(stored));
-      } catch {}
+      } catch {
+        // ignoramos errores de parseo
+      }
     }
   }, []);
 
@@ -81,30 +219,56 @@ function DashboardPage() {
     setTracks((prev) => prev.filter((t) => t.id !== trackId));
   };
 
-  // Generación de playlist
-  const handleGeneratePlaylist = async () => {
-    setError("");
-
+  // Construir preferencias finales (widgets + mood)
+  const buildFinalPreferences = () => {
     const popularityRange = Array.isArray(popularity)
       ? popularity
       : mapPopularityToRange(popularity);
 
-    const preferences = {
+    const basePreferences = {
       artists,
       genres,
       decades,
+      yearRange,
       popularity: popularityRange,
-      mood,
-      seedTracks, // preparado por si quieres usarlo en el futuro
+      mood, // objeto completo
+      seedTracks, // disponible para usarlo en el futuro en generatePlaylist
     };
+
+    return adjustPreferencesForMood(basePreferences, mood);
+  };
+
+  // Generar / refrescar playlist (reemplaza la lista actual)
+  const handleGeneratePlaylist = async () => {
+    setError("");
+
+    const finalPreferences = buildFinalPreferences();
 
     try {
       setIsGenerating(true);
-      const newTracks = await generatePlaylist(preferences);
+      const newTracks = await generatePlaylist(finalPreferences);
       setTracks(newTracks);
     } catch (err) {
       console.error(err);
       setError("Hubo un problema al generar la playlist.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Añadir más canciones sin perder las actuales (merge sin duplicados)
+  const handleAddMoreTracks = async () => {
+    setError("");
+
+    const finalPreferences = buildFinalPreferences();
+
+    try {
+      setIsGenerating(true);
+      const moreTracks = await generatePlaylist(finalPreferences);
+      setTracks((prev) => mergeTracksUnique(prev, moreTracks));
+    } catch (err) {
+      console.error(err);
+      setError("Hubo un problema al añadir más canciones.");
     } finally {
       setIsGenerating(false);
     }
@@ -145,10 +309,17 @@ function DashboardPage() {
         <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
           {/* CINTA SUPERIOR */}
           <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-fuchsia-500/20 via-sky-500/10 to-indigo-500/20 px-4 py-3 text-xs backdrop-blur-sm">
-            <div className="flex justify-between flex-wrap gap-2">
-              <span className="rounded-full border border-white/30 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.22em]">
-                Tour dashboard
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-white/30 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.22em]">
+                  Tour dashboard
+                </span>
+                {currentMoodAlbum && (
+                  <span className="rounded-full border border-white/40 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.22em] text-sky-100">
+                    Mood: {currentMoodAlbum}
+                  </span>
+                )}
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 <span className="rounded-full bg-black/40 px-3 py-1">
@@ -174,7 +345,10 @@ function DashboardPage() {
               <ArtistWidget onChange={setArtists} />
               <TrackWidget onChange={setSeedTracks} />
               <GenreWidget onChange={setGenres} />
-              <DecadeWidget onChange={setDecades} />
+              <DecadeWidget
+                onChange={setDecades}
+                onRangeChange={setYearRange}
+              />
               <MoodWidget onChange={setMood} />
               <PopularityWidget onChange={setPopularity} />
             </div>
@@ -183,20 +357,45 @@ function DashboardPage() {
             <div className="space-y-4">
               {/* SETLIST */}
               <div className="rounded-2xl border border-white/10 bg-black/60 p-4 backdrop-blur">
-                <div className="flex justify-between border-b border-white/10 pb-3 text-xs">
-                  <span className="text-zinc-300">
-                    {tracks.length === 0
-                      ? "Aún no hay canciones en tu setlist."
-                      : `Tienes ${tracks.length} canciones en tu setlist.`}
-                  </span>
+                <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-white/10 pb-3 text-xs">
+                  <div className="space-y-0.5">
+                    <span className="block text-zinc-300">
+                      {tracks.length === 0
+                        ? "Aún no hay canciones en tu setlist."
+                        : `Tienes ${tracks.length} canciones en tu setlist.`}
+                    </span>
+                    {currentMoodAlbum && (
+                      <span className="block text-[10px] text-zinc-400">
+                        Mood actual basado en:{" "}
+                        <span className="font-semibold text-zinc-200">
+                          {currentMoodAlbum}
+                        </span>
+                      </span>
+                    )}
+                  </div>
 
-                  <button
-                    onClick={handleGeneratePlaylist}
-                    disabled={isGenerating}
-                    className="rounded-full border border-white/30 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] hover:bg-white/15 disabled:opacity-40"
-                  >
-                    {isGenerating ? "Generando..." : "Generar playlist"}
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={handleGeneratePlaylist}
+                      disabled={isGenerating}
+                      className="rounded-full border border-white/30 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] hover:bg-white/15 disabled:opacity-40"
+                    >
+                      {tracks.length === 0
+                        ? isGenerating
+                          ? "Generando..."
+                          : "Generar playlist"
+                        : isGenerating
+                        ? "Refrescando..."
+                        : "Refrescar playlist"}
+                    </button>
+                    <button
+                      onClick={handleAddMoreTracks}
+                      disabled={isGenerating || tracks.length === 0}
+                      className="rounded-full border border-white/25 bg-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-200 hover:bg-white/10 disabled:opacity-30"
+                    >
+                      {isGenerating ? "Añadiendo..." : "Añadir más canciones"}
+                    </button>
+                  </div>
                 </div>
 
                 {error && <p className="mt-2 text-rose-300">{error}</p>}
