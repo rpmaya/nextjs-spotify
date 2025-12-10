@@ -8,14 +8,14 @@ function DecadeWidget({ onChange }) {
   // Décadas con guiños a letras de Taylor
   const decades = [
     { value: "1920", label: "1920 – Roaring twenties, tossing pennies in the pool" },
-    { value: "1930", label: "1930 – " },
+    { value: "1930", label: "1930 – Watched as you signed your name Marjorie" },
     { value: "1940", label: "1940 – I met Bobby on the boardwalk summer of '45" },
     { value: "1950", label: "1950 – The 1950s shit they want from me" },
     { value: "1960", label: "1960 – So overnight, you look like a '60s queen" },
     { value: "1970", label: "1970 – " },
     { value: "1980", label: "1980 – My name is Taylor. I was borned in 1989" },
     { value: "1990", label: "1990 – Comeback stronger than a nineties trend" },
-    { value: "2000", label: "2000 – It was the end of a decade, but the start of an age" },
+    { value: "2000", label: "2000 – It was the end of an era, but the start of an age" },
     { value: "2010", label: "2010 – I'm only 17, I don't know anything" },
     { value: "2020", label: "2020 – I don't know about you, but I'm felling 22" },
   ];

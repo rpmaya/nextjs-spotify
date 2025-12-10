@@ -1,18 +1,57 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isAuthenticated, logout } from "@/lib/auth";
+import { generatePlaylist } from "@/lib/spotify";
+
 import ArtistWidget from "@/components/widgets/ArtistWidget";
+import GenreWidget from "@/components/widgets/GenreWidget";
 import DecadeWidget from "@/components/widgets/DecadeWidget";
 import PopularityWidget from "@/components/widgets/PopularityWidget";
+import MoodWidget from "@/components/widgets/MoodWidget";
+import FavoritesWidget from "@/components/widgets/FavoritesWidget";
 
-
+function mapPopularityToRange(value) {
+  if (value <= 30) return [0, 50];
+  if (value <= 60) return [30, 80];
+  return [60, 100];
+}
 
 function DashboardPage() {
   const router = useRouter();
 
-  // Protección de ruta: si no está autenticado, vuelve al inicio
+  // ESTADO DE PREFERENCIAS
+  const [artists, setArtists] = useState([]);
+  const [genres, setGenres] = useState([]);
+  const [decades, setDecades] = useState([]);
+  const [popularity, setPopularity] = useState(70);
+  const [mood, setMood] = useState(null);
+
+  // PLAYLIST GENERADA
+  const [tracks, setTracks] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState("");
+
+  // FAVORITOS
+  const [favoriteTracks, setFavoriteTracks] = useState([]);
+
+  // Cargar favoritos desde localStorage al iniciar
+  useEffect(() => {
+    const stored = localStorage.getItem("favoriteTracks");
+    if (stored) {
+      try {
+        setFavoriteTracks(JSON.parse(stored));
+      } catch {}
+    }
+  }, []);
+
+  // Guardar favoritos en localStorage cuando cambien
+  useEffect(() => {
+    localStorage.setItem("favoriteTracks", JSON.stringify(favoriteTracks));
+  }, [favoriteTracks]);
+
+  // Protección de ruta
   useEffect(() => {
     if (!isAuthenticated()) {
       router.replace("/");
@@ -24,14 +63,51 @@ function DashboardPage() {
     router.replace("/");
   };
 
+  // Añadir / quitar favorito
+  const toggleFavorite = (track) => {
+    setFavoriteTracks((prev) => {
+      const exists = prev.some((t) => t.id === track.id);
+      if (exists) {
+        return prev.filter((t) => t.id !== track.id);
+      }
+      return [...prev, track];
+    });
+  };
+
+  // Generación de playlist
+  const handleGeneratePlaylist = async () => {
+    setError("");
+
+    const popularityRange = Array.isArray(popularity)
+      ? popularity
+      : mapPopularityToRange(popularity);
+
+    const preferences = {
+      artists,
+      genres,
+      decades,
+      popularity: popularityRange,
+      mood,
+    };
+
+    try {
+      setIsGenerating(true);
+      const newTracks = await generatePlaylist(preferences);
+      setTracks(newTracks);
+    } catch (err) {
+      console.error(err);
+      setError("Hubo un problema al generar la playlist.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-purple-900 via-slate-950 to-black text-white">
-      {/* Capa de brillo suave estilo show de luces */}
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(244,114,182,0.18),_transparent_55%),_radial-gradient(circle_at_bottom,_rgba(59,130,246,0.20),_transparent_55%)]" />
 
-      {/* Contenido */}
       <div className="relative z-10">
-        {/* Header tipo Eras Tour */}
+        {/* HEADER */}
         <header className="border-b border-white/10 bg-black/40 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
             <div className="space-y-1">
@@ -42,162 +118,102 @@ function DashboardPage() {
                 Spotify Taste Mixer
               </h1>
               <p className="text-xs text-zinc-300/80">
-                Diseña tu propio setlist mezclando eras, estados de ánimo y
-                décadas.
+                Diseña tu propio setlist mezclando eras, estados de ánimo y décadas.
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <div className="hidden text-right text-[11px] text-zinc-300/80 sm:block">
-                <p className="uppercase tracking-[0.18em]">
-                  Session
-                </p>
-                <p className="text-xs text-zinc-400">
-                  Listener mode
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-full border border-white/30 bg-white/5 px-4 py-2 text-xs font-medium uppercase tracking-[0.18em] transition hover:bg-white/15"
-              >
-                Cerrar sesión
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-full border border-white/30 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.18em] hover:bg-white/15"
+            >
+              Cerrar sesión
+            </button>
           </div>
         </header>
 
-        {/* Main */}
+        {/* MAIN */}
         <main className="mx-auto max-w-6xl px-4 py-6 space-y-6">
-          {/* Cinta de estado tipo gira */}
-          <section className="overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-r from-fuchsia-500/20 via-sky-500/10 to-indigo-500/20 px-4 py-3 text-xs backdrop-blur-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-white/30 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.22em]">
-                  Tour dashboard
-                </span>
-                <span className="text-[11px] text-zinc-100/90">
-                  Ajusta tus preferencias para crear una playlist que recorra tus eras.
-                </span>
-              </div>
-              <div className="flex flex-wrap gap-2 text-[11px] text-zinc-100/85">
-                <span className="rounded-full bg-black/40 px-3 py-1">
-                  Eras activas: por definir
-                </span>
-                <span className="rounded-full bg-black/40 px-3 py-1">
-                  Setlist: vacío
-                </span>
+          {/* CINTA SUPERIOR */}
+          <section className="rounded-2xl border border-white/10 bg-gradient-to-r from-fuchsia-500/20 via-sky-500/10 to-indigo-500/20 px-4 py-3 text-xs backdrop-blur-sm">
+            <div className="flex justify-between">
+              <span className="rounded-full border border-white/30 bg-black/40 px-3 py-1 text-[10px] uppercase tracking-[0.22em]">
+                Tour dashboard
+              </span>
+
+              <div className="flex gap-2">
+                <span className="rounded-full bg-black/40 px-3 py-1">Eras: {decades.length}</span>
+                <span className="rounded-full bg-black/40 px-3 py-1">Artistas: {artists.length}</span>
+                <span className="rounded-full bg-black/40 px-3 py-1">Géneros: {genres.length}</span>
               </div>
             </div>
           </section>
 
-          {/* Layout principal: preferencias vs playlist */}
-          <section className="grid gap-5 lg:grid-cols-[minmax(0,2.2fr)_minmax(0,2.8fr)]">
-            {/* Columna izquierda: preferencias / widgets */}
+          {/* LAYOUT DOS COLUMNAS */}
+          <section className="grid gap-5 lg:grid-cols-[2fr_2.2fr]">
+            {/* IZQUIERDA – Widgets */}
             <div className="space-y-4">
-              <div className="flex items-baseline justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.20em] text-zinc-200">
-                    Tus eras y preferencias
-                  </h2>
-                  <p className="text-xs text-zinc-400">
-                    Aquí irán los widgets inspirados en cada era de Taylor.
-                  </p>
-                </div>
-                <span className="text-[10px] uppercase tracking-[0.20em] text-zinc-500">
-                  Step 1 · Configura tu mood
-                </span>
-              </div>
+              <ArtistWidget onChange={setArtists} />
+              <GenreWidget onChange={setGenres} />
+              <DecadeWidget onChange={setDecades} />
+              <MoodWidget onChange={setMood} />
+              <PopularityWidget onChange={setPopularity} />
+            </div>
 
-              {/* Grid de widgets (por ahora placeholders, luego los vestimos por era) */}
-              <div className="grid gap-4 md:grid-cols-2">
-                <ArtistWidget />
-              </div>
-
-                {/* Géneros */}
-                <div className="group rounded-2xl border border-white/10 bg-gradient-to-b from-pink-500/15 via-black/40 to-black/60 p-4 shadow-[0_0_40px_rgba(236,72,153,0.35)]">
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.20em] text-zinc-100">
-                    Géneros
-                  </h3>
-                  <p className="mt-1 text-[11px] text-zinc-300/85">
-                    Aquí colocaremos el widget de géneros. Más adelante lo
-                    adaptamos a la era que nos indiques.
-                  </p>
-                  <div className="mt-3 h-10 rounded-xl border border-dashed border-white/15 bg-black/30" />
-                </div>
-
-                <div className="md:col-span-2">
-                    <DecadeWidget />
-                </div>
-                
-
-                {/* Mood / Estado de ánimo */}
-                <div className="group rounded-2xl border border-white/10 bg-gradient-to-b from-emerald-500/15 via-black/40 to-black/60 p-4 shadow-[0_0_40px_rgba(16,185,129,0.35)]">
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.20em] text-zinc-100">
-                    Estado de ánimo
-                  </h3>
-                  <p className="mt-1 text-[11px] text-zinc-300/85">
-                    Aquí irá el widget de mood (calm, fearless, reputation, etc.).
-                  </p>
-                  <div className="mt-3 h-10 rounded-xl border border-dashed border-white/15 bg-black/30" />
-                </div>
-
-                {/* Popularidad – widget inspirado en 1989 */}
-                <div className="md:col-span-2">
-                    <PopularityWidget />
-                </div>
-
-
-            {/* Columna derecha: playlist / setlist generado */}
+            {/* DERECHA – Setlist + Favoritas */}
             <div className="space-y-4">
-              <div className="flex items-baseline justify-between gap-2">
-                <div>
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.20em] text-zinc-200">
-                    Setlist generado
-                  </h2>
-                  <p className="text-xs text-zinc-400">
-                    Cuando conectemos los widgets con la API, aquí aparecerán las canciones.
-                  </p>
-                </div>
-                <span className="text-[10px] uppercase tracking-[0.20em] text-zinc-500">
-                  Step 2 · Curate your tour
-                </span>
-              </div>
-
+              {/* SETLIST */}
               <div className="rounded-2xl border border-white/10 bg-black/60 p-4 backdrop-blur">
-                <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 text-xs">
+                <div className="flex justify-between border-b border-white/10 pb-3 text-xs">
                   <span className="text-zinc-300">
-                    Aún no hay canciones en tu setlist.
+                    {tracks.length === 0
+                      ? "Aún no hay canciones en tu setlist."
+                      : `Tienes ${tracks.length} canciones en tu setlist.`}
                   </span>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-full border border-white/30 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] transition hover:bg-white/15"
-                    >
-                      Generar playlist
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-full border border-white/20 bg-transparent px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-zinc-300 hover:bg-white/10"
-                    >
-                      Añadir más canciones
-                    </button>
-                  </div>
+
+                  <button
+                    onClick={handleGeneratePlaylist}
+                    disabled={isGenerating}
+                    className="rounded-full border border-white/30 bg-white/5 px-3 py-1 text-[10px] uppercase tracking-[0.2em] hover:bg-white/15 disabled:opacity-40"
+                  >
+                    {isGenerating ? "Generando..." : "Generar playlist"}
+                  </button>
                 </div>
 
-                {/* Placeholder de lista de temas */}
-                <div className="mt-3 space-y-2 text-[11px] text-zinc-300/85">
-                  <p>
-                    Más adelante aquí incluiremos:
-                  </p>
-                  <ul className="ml-4 list-disc space-y-1">
-                    <li>Listado de canciones con título, artista y era aproximada.</li>
-                    <li>Botones para eliminar canciones del setlist.</li>
-                    <li>Marcadores de favoritos con persistencia en localStorage.</li>
-                    <li>Acciones para refrescar y combinar nuevas eras.</li>
-                  </ul>
-                </div>
+                {error && <p className="mt-2 text-rose-300">{error}</p>}
+
+                {/* LISTA DE TEMAS */}
+                <ul className="mt-3 space-y-2 text-[11px] text-zinc-200">
+                  {tracks.map((track) => (
+                    <li
+                      key={track.id}
+                      className="flex items-center justify-between rounded-xl border border-white/10 bg-black/60 px-3 py-2"
+                    >
+                      <div className="truncate">
+                        <p className="font-medium truncate">{track.name}</p>
+                        <p className="text-[10px] text-zinc-400 truncate">
+                          {track.artists?.map((a) => a.name).join(", ")}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => toggleFavorite(track)}
+                        className="rounded-full border border-white/20 px-2 py-1 text-[10px] hover:bg-white/10"
+                      >
+                        {favoriteTracks.some((f) => f.id === track.id)
+                          ? "Unfav"
+                          : "Fav"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
               </div>
+
+              {/* WIDGET LOVER – FAVORITAS */}
+              <FavoritesWidget
+                favorites={favoriteTracks}
+                onClear={() => setFavoriteTracks([])}
+              />
             </div>
           </section>
         </main>
