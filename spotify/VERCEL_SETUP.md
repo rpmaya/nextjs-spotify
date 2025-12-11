@@ -1,5 +1,7 @@
 # Configuración para Vercel
 
+🚀 **[Ver la aplicación en vivo](https://nextjs-spotify-adriana-alamo-trudytru30s-projects.vercel.app)**
+
 Este documento explica cómo desplegar el proyecto Spotify Taste Mixer en Vercel.
 
 ## Pasos para el despliegue
@@ -10,7 +12,7 @@ Este documento explica cómo desplegar el proyecto Spotify Taste Mixer en Vercel
 2. Crea una nueva aplicación o usa una existente
 3. Anota el **Client ID** y **Client Secret**
 4. En "Edit Settings", añade las siguientes Redirect URIs:
-   - Para producción: `https://nextjs-spotify-adriana-alamo.vercel.app/auth/callback`
+   - Para producción: `https://nextjs-spotify-adriana-alamo-trudytru30s-projects.vercel.app/auth/callback`
    - Para desarrollo: `http://localhost:3000/auth/callback`
 
 ### 2. Configurar variables de entorno en Vercel
@@ -22,7 +24,7 @@ Este documento explica cómo desplegar el proyecto Spotify Taste Mixer en Vercel
 ```
 NEXT_PUBLIC_SPOTIFY_CLIENT_ID=tu_client_id
 SPOTIFY_CLIENT_SECRET=tu_client_secret
-NEXT_PUBLIC_REDIRECT_URI=https://nextjs-spotify-adriana-alamo.vercel.app/auth/callback
+NEXT_PUBLIC_REDIRECT_URI=https://nextjs-spotify-adriana-alamo-trudytru30s-projects.vercel.app/auth/callback
 ```
 
 **IMPORTANTE:**
