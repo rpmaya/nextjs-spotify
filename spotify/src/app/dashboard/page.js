@@ -10,7 +10,7 @@ import GenreWidget from "@/components/widgets/GenreWidget";
 import DecadeWidget from "@/components/widgets/DecadeWidget";
 import PopularityWidget from "@/components/widgets/PopularityWidget";
 import MoodWidget from "@/components/widgets/MoodWidget";
-import FavoritesWidget from "@/components/widgets/FavoriteWidget";
+import FavoritesWidget from "@/components/widgets/FavoritesWidget";
 import TrackWidget from "@/components/widgets/TrackWidget";
 
 function mapPopularityToRange(value) {
