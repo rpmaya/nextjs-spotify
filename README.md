@@ -1,5 +1,7 @@
 # 🎵 Spotify Taste Mixer - Proyecto Final
 
+🚀 **[Ver la aplicación en vivo](https://nextjs-spotify-adriana-alamo-trudytru30s-projects.vercel.app)**
+
 Aplicación web que genera playlists personalizadas de Spotify basándose en las preferencias musicales del usuario mediante widgets configurables.
 
 ## 📋 Tabla de Contenidos

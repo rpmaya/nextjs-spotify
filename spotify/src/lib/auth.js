@@ -8,10 +8,23 @@ export function generateRandomString(length) {
   return text;
 }
 
+// Obtener automáticamente la URL base (localhost vs Vercel)
+function getBaseUrl() {
+  if (typeof window !== "undefined") {
+    return window.location.origin; 
+  }
+  return process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
+}
+
 // Construir URL de autorización de Spotify
 export function getSpotifyAuthUrl() {
   const clientId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID || '';
-  const redirectUri = process.env.NEXT_PUBLIC_REDIRECT_URI || '';
+
+  // Usa el valor de env o calcula según el dominio actual
+  const redirectUri =
+    process.env.NEXT_PUBLIC_REDIRECT_URI ||
+    `${getBaseUrl()}/auth/callback`;
+
   const state = generateRandomString(16);
 
   // Guardar el state para validación posterior (prevenir CSRF)
